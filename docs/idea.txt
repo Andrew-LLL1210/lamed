@@ -1,0 +1,129 @@
+Hello World!
+
+This is the first public document I have ever written on my language idea Lamed.
+The name is a joke referencing the Hebrew letter. Most languages (including functional languages)
+Naturally compose functions inside of each other by writing the first applied function on the right.
+This can be awkward when writing, because you need to think about your data transformations in
+packets and then write them in reverse order.
+It is also awkward when reading, because understanding unfamiliar function calls often relies on knowing
+the arguments' types and values, which means that you must read code from right to left.
+The only groups of languages that really address this are shell languages, where
+composition happens through left-to-right piping,
+and concatenative languages, which use pure RPN, basically just as a gimmick.
+Lamed does not intend to be a shell language (it will be very strongly typed)
+nor a concatenative language (I think total left-to-right order can be a hamper to readability more than a help).
+Lamed fits quite squarely with the purely functional languages.
+
+Technical Design
+The tech stack for Lamed should include only Zig and C dependancies, and then only those that are cross-target.
+Lamed will be statically typed using a typeclass system similar to Haskell's.
+(Future aspirations) Lamed may or may not gain a type of cached static analysis that I would call "proofs."
+
+Language Design
+Language should be unambiguous but concise. With a sufficiently strong typing system,
+certain rules of syntax can be elided without ambiguity, such as implicit namespaceing or argument order swivelling.
+A good heuristic for the language design would be that when notetaking, your pseudocode can be valid Lamed without
+hassling about syntax rules. To this end, there is semantic whitespace and implicit scoping.
+Operator precedence can be confusing in any language, so much so that the concatenative and Iversonian languages do without it at all.
+Instead of a basic table, I will use a DAG to define precedence rules so that operator pairs that don't have a sensible precedence
+are not allowed to be used without grouping (unless type information disambiguates).
+
+I think it makes sense, in the context of Lamed, to borrow the noun/verb analogy from the Iversonian languages to describe
+how the syntax operates. I may extend this analogy to include subject/object or transitive/intransitive/passive/reflexive distinctions.
+We will see what works.
+
+I am also interested in trying out something like linear typing
+
+below I will write some Proto-Lamed from my notes, in order to base future work off of.
+If you are reading this, be aware that this is not lamed code, because lamed does not have even a semi-stable spec yet.
+
+//DFS
+dfs = [start: Node, isGoal: [Node] Bool, traverse: [Node] Bool]: ?Node
+    Stack.empty .push start
+	while not .empty and .top not isGoal do
+	    fold:.push (.pop.next.filter traverse)
+	.top
+
+
+
+Here's some notes in Haskell and the translation to Proto-Lamed
+I cannot at this point in time verify that the Haskell is correct
+// topological sort
+
+topoSort :: Graph -> Maybe [Node]
+
+type Node = Int
+type Graph = [[Node]]
+
+nodes :: Graph -> [Node]
+nodes g = [1..length g]
+
+connectedNodes :: Graph -> Node -> [Node]
+connectedNodes = (!!)
+
+data State = Unknown | Discovered | Visited
+type States = Map Node State
+
+foldlbind :: Monad m => (a -> x -> m a) -> m a -> [x] -> m a
+foldlbind f ma xs = foldl (>>=) ma $ map (swap f) xs
+
+topoPath :: Graph -> (States, Node) -> Maybe (States, [Node])
+topoPath g (s, n) = case s ! n of
+    Discovered -> Nothing
+	Visited -> Just (s, [])
+	Unknown -> foldlbind
+	    (\(s, p) n -> fmap (p++) <$> topoPath g (s, n))
+		(s & insert n Discovered, [])
+		(connectedNodes g n)
+		<&> bimap (insert n Visited) (node :)
+
+topoSort g = foldlbind
+    (\(s, p) n -> fmap (p++) <$> topoPath g (s, n))
+	(initialState g, []) (nodes g)
+	<&> snd
+
+
+//topoSort :: Graph -> Maybe [Node]
+topoSort: [Graph] Node List?
+
+//type Node = Int
+//type Graph = [[Node]]
+
+//nodes :: Graph -> [Node]
+//nodes g = [1..length g]
+//nodes g = takeWhile (<= length g) infinite_list where
+//    infinite_list = 1 : map succ infinite_list
+
+//connectedNodes :: Graph -> Node -> [Node]
+//connectedNodes = (!!)
+
+//data State = Unknown | Discovered | Visited
+//type States = Map Node State
+
+//foldlbind :: Monad m => (a -> x -> m a) -> m a -> [x] -> m a
+//foldlbind f ma xs = foldl (>>=) ma $ map (swap f) xs
+
+//topoPath :: Graph -> (States, Node) -> Maybe (States, [Node])
+//topoPath g (s, n) = case s ! n of
+    //Discovered -> Nothing
+	//Visited -> Just (s, [])
+	//Unknown -> foldlbind
+	    //(\(s, p) n -> fmap (p++) <$> topoPath g (s, n))
+		//(s & insert n Discovered, [])
+		//(connectedNodes g n)
+		//<&> bimap (insert n Visited) (node :)
+
+.topoPath: [Graph, States, Node] .get match
+	[:discovered] :null
+	[:visited] :empty
+	[:unknown]
+	    .insert :discovered
+		.connectedNodes.fold: (++ .topoPath)
+		.insert :visited .append
+
+
+
+//topoSort g = foldlbind
+    //(\(s, p) n -> fmap (p++) <$> topoPath g (s, n))
+	//(initialState g, []) (nodes g)
+	//<&> snd
