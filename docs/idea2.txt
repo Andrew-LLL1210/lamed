@@ -1,0 +1,135 @@
+
+
+primitives
+
+integer: any bit width
+float: specific bit width
+
+How to resolve a symbol?
+Symbol resolution should be straightforward
+
+function calls should have () even when all the arguments are fronted. That way, functions and nonfunction symbols can live in the same namespace
+- no, this would actually make them syntactically distinct and therefore allow them to not be in the same namespace.
+
+The question is whether functions should be able to be referenced without being called. In most languages this is pretty important, and since Lamed is functional, it is even more important.
+
+maybe like in haskell, functions and nonfunctions are both created with the same syntax. functions are just values with arguments.
+
+```
+let foo = 3
+let bar(x) = x + 4
+
+foo bar() == bar(foo) == 7
+```
+
+so there are 3 types of syntax that we want:
+
+RPN to make data flow forward and remove a lot of parentheses
+C-style function calls to create zones or whatever
+infix operators (because they are just the only thing that's good)
+
+CRPL (from creeper world 3) has RPN and C-style function calls, but not infix operators.
+
+RPN and C-style are syntactically orthogonal. But infix operators are directly opposed to RPN.
+If we syntactically differentiate between operator-type symbols and word-type symbols (like haskell) then we can do
+
+let bar(x) = x + 4
+let bar(x) = x 4 (+)() // parentheses means 'treat like a word-symbol'
+let bar(x) = x (+ 4)() // a section
+let bar(x) = x mod(4)
+let bar(x) = x 4 mod()
+let bar(x) = x `mod` 4
+
+let bars(xs) = xs.map(\x: x `mod` 4) // a lambda
+let bars(xs) = xs.map: mod(4) // simpler syntax
+let bars(xs) = xs.map(+ 4) // sections don't need parentheses if the operator is at the front of an expression
+let bars(xs) = (+ 4) xs.map
+let bars(xs) = xs (+ 4) List.map
+
+List.map :: List(a), (a -> b) -> List(b)
+
+Lambda syntax:
+let bar = \x: x + 4 // standalone
+let bar =: + 4 // point-free
+let bar(xs) = xs.map: + 4 // point-free as an argument
+ 
+since the colon starts a scope, it might be wise to enforce a lexeme (semicolon) to close the scope. this would prevent us from requiring whitespace rules (good for autoformatting) and prevent us from needing brackets or something else to note what the indentation shows anyway.
+
+Maybe the colon is implicit anywhere that the whitespace rules are followed, but if you don't want to follow the whitespace rules you can use a semicolon to appease the parser. Then should we recommend using it or not? Should the autoformatter insert semicolons everywhere or only use the semicolons to fix the whitespace, and then delete them?
+Maybe this is not a huge issue for the lambda delimiter. but what if we want a delimiter for 'where' or a similar lexeme that opens a scope? That would seem consistent. what if an enclosing scope ends in a lambda? this would make the code read 'where let x =: + 4;;'. That is ugly. So the autoformatter should remove semicolons?
+Idk even how difficult it is to have optional semicolons on top of optional semantic whitespace in the parser. maybe that's not feasible. But if it can be done then i'd probably like to do it, since the priority of this language is readability and convenience.
+
+OK, here is the working spec:
+
+ASCII printable characters
+
+    whitespace
+SP LF CR HT
+    alphabetic (word chars)
+ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz
+    digits (word chars)
+0123456789
+    punctuation
+@ ( ) " ' ` , . : ; [ ] \ { } /
+    operator chars
+! & * + - % < > # $ ? ^ | ~ =
+    nonalphabetic word chars
+_
+
+lexing: a token is a string starting at some start index with maximal length such that it matches one of the patterns:
+- operation tokens are single punctuation characters or one or more operation characters
+- number tokens are ('+' | '-')? ('0b' | '0x' | '0o')? (digit+ / '.' digit+)
+    - where the pattern << a / b >> accepts "a", "b", or "ab"
+    - number tokens must not be followed by an alphabetic character
+    - a base prefix must be followed by a digit (try adding a leading zero)
+- word tokens are one or more word chars not beginning with a digit
+
+- punctuation tokens are reserved operation tokens
+- keyword tokens are reserved word tokens
+
+top_level_definition
+   = "let" WORD parameters? "=" expression
+   | "let" maybe_parenthesized(WORD OPERATION WORD) "=" expression
+
+parameters = "(" WORD ("," WORD)* ","? ")"
+
+maybe_parenthesized(x)
+   = "(" x ")"
+   | x
+
+expression = term (OPERATION term)*
+
+term
+   = "(" expression ")"
+   | symbol_call symbol_call*
+
+symbol_call
+   = word_symbol call_portion?
+
+call_portion
+   = "(" expression ("," expression)* ","? ")"
+   | word_symbol ":" expression ";"
+
+word_symbol
+   = WORD ("." WORD)* ("[" OPERATION "]")?
+   | "(" OPERATION symbol_call* ")"
+
+let bar(x) = x + 4
+let bar(x) = x 4 (+)() // parentheses means 'treat like a word-symbol'
+let bar(x) = x (+ 4)() // a section
+let bar(x) = x mod(4)
+let bar(x) = x 4 mod()
+let bar(x) = x `mod` 4
+
+let bars(xs) = xs.map(\x: x `mod` 4) // a lambda
+let bars(xs) = xs.map: mod(4) // simpler syntax
+let bars(xs) = xs.map(+ 4) // sections don't need parentheses if the operator is at the front of an expression
+let bars(xs) = (+ 4) xs.map
+let bars(xs) = xs (+ 4) List.map
+
+List.map :: List(a), (a -> b) -> List(b)
+
+Lambda syntax:
+let bar = \x: x + 4 // standalone
+let bar =: + 4 // point-free
+let bar(xs) = xs.map: + 4 // point-free as an argument
